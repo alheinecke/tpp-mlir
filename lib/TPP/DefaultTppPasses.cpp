@@ -130,6 +130,9 @@ private:
       // bufferization.
       pm.addNestedPass<func::FuncOp>(createDecomposeAggregatedOps());
 
+      // Flatten 2D scf.forall loops using space-filling curve before bufferization.
+      pm.addPass(createSCFForAllLoopFlattenSFC());
+
       // Bufferize: tensor->memref.
       pm.addPass(createBufferize());
 
