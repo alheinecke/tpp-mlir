@@ -437,6 +437,17 @@ def SCFParallelLoopTiling : Pass<"scf-parallel-loop-tiling-pass"> {
   let dependentDialects = ["affine::AffineDialect", "scf::SCFDialect"];
 }
 
+def SCFForAllLoopFlatten : Pass<"scf-forall-loop-flatten"> {
+  let summary = "Flatten 2D forall loops into 1D with index vectors";
+  let description = [{
+    Transform innermost scf.forall operations with exactly 2 induction variables
+    into scf.forall with 1 induction variable. Creates constant dense vectors
+    containing the flattened iteration space values, and uses vector.extract
+    with dynamic position to derive the original induction variables inside the loop body.
+  }];
+  let dependentDialects = ["scf::SCFDialect", "arith::ArithDialect", "vector::VectorDialect"];
+}
+
 def GpuInlineConstants : Pass<"gpu-inline-constants", "func::FuncOp"> {
   let summary = "Inlines constants into GPU launch.";
   let description = [{
