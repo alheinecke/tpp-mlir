@@ -11,6 +11,38 @@
 //
 //===----------------------------------------------------------------------===//
 
+/****************************************************************************************
+  BSD 2-Clause License
+
+  Copyright (c) 2018, Jakub Červený
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  * Redistributions of source code must retain the above copyright notice, this
+    list of conditions and the following disclaimer.
+
+  * Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+****************************************************************************************/
+
+/* The generalized hilbert functions are from: https://github.com/jakubcerveny/gilbert */
+
+#define TPP_MLIR_SIGN(A) (0 < (A) ? (1) : ( 0 == (A) ? (0) : (-1)))
+
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Utils/Utils.h"
@@ -30,6 +62,125 @@ namespace tpp {
 
 using namespace mlir;
 using namespace mlir::scf;
+
+/// Free functions for calculting generlized hilbert index from multi-dimensional indices and bounds
+static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
+                       int64_t *xres, int64_t *yres,
+                       int64_t ax,int64_t ay,
+                       int64_t bx,int64_t by );
+
+static int64_t tpp_mlir_gilbert_d2xy(int64_t *x, int64_t *y, int64_t idx, int64_t w,int64_t h);
+
+static int64_t tpp_mlir_gilbert_d2xy(int64_t *x, int64_t *y, int64_t idx,int64_t w,int64_t h) {
+  *x = 0;
+  *y = 0;
+
+  if (w >= h) {
+    return tpp_mlir_gilbert_d2xy_r(idx,0, x,y, w,0, 0,h);
+  }
+  return tpp_mlir_gilbert_d2xy_r(idx,0, x,y, 0,h, w,0);
+}
+
+static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
+                       int64_t *xres, int64_t *yres,
+                       int64_t ax,int64_t ay,
+                       int64_t bx,int64_t by ) {
+  int64_t nxt_idx;
+  int64_t w, h, x, y,
+      dax, day,
+      dbx, dby,
+      di;
+  int ax2, ay2, bx2, by2, w2, h2;
+
+  w = std::abs(ax + ay);
+  h = std::abs(bx + by);
+
+  x = *xres;
+  y = *yres;
+
+  /* unit major direction */
+  dax = TPP_MLIR_SIGN(ax);
+  day = TPP_MLIR_SIGN(ay);
+
+  /* unit orthogonal direction */
+  dbx = TPP_MLIR_SIGN(bx);
+  dby = TPP_MLIR_SIGN(by);
+
+  di = dst_idx - cur_idx;
+
+  if (h == 1) {
+    *xres = x + dax*di;
+    *yres = y + day*di;
+    return 0;
+  }
+
+  if (w == 1) {
+    *xres = x + dbx*di;
+    *yres = y + dby*di;
+    return 0;
+  }
+
+  /* floor function */
+  ax2 = ax >> 1;
+  ay2 = ay >> 1;
+  bx2 = bx >> 1;
+  by2 = by >> 1;
+
+  w2 = std::abs(ax2 + ay2);
+  h2 = std::abs(bx2 + by2);
+
+  if ((2*w) > (3*h)) {
+    if ((w2 & 1) && (w > 2)) {
+      /* prefer even steps */
+      ax2 += dax;
+      ay2 += day;
+    }
+
+    /* long case: split in two parts only */
+    nxt_idx = cur_idx + std::abs((ax2 + ay2)*(bx + by));
+    if ((cur_idx <= dst_idx) && (dst_idx < nxt_idx)) {
+      *xres = x;
+      *yres = y;
+      return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx,  xres, yres, ax2, ay2, bx, by);
+    }
+    cur_idx = nxt_idx;
+
+    *xres = x + ax2;
+    *yres = y + ay2;
+    return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx, xres, yres, ax-ax2, ay-ay2, bx, by);
+  }
+
+  if ((h2 & 1) && (h > 2)) {
+    /* prefer even steps */
+    bx2 += dbx;
+    by2 += dby;
+  }
+
+  /* standard case: one step up, one long horizontal, one step down */
+  nxt_idx = cur_idx + std::abs((bx2 + by2)*(ax2 + ay2));
+  if ((cur_idx <= dst_idx) && (dst_idx < nxt_idx)) {
+    *xres = x;
+    *yres = y;
+    return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx, xres,yres, bx2,by2, ax2,ay2);
+  }
+  cur_idx = nxt_idx;
+
+  nxt_idx = cur_idx + std::abs((ax + ay)*((bx - bx2) + (by - by2)));
+  if ((cur_idx <= dst_idx) && (dst_idx < nxt_idx)) {
+    *xres = x + bx2;
+    *yres = y + by2;
+    return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx, xres,yres, ax,ay, bx-bx2,by-by2);
+  }
+  cur_idx = nxt_idx;
+
+  *xres = x + (ax - dax) + (bx2 - dbx);
+  *yres = y + (ay - day) + (by2 - dby);
+  return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx,
+                        xres,yres,
+                        -bx2, -by2,
+                        -(ax-ax2), -(ay-ay2));
+}
+
 
 /// Flatten a 2D forall loop of the form:
 ///   scf.forall (%i, %j) in (%ub0, %ub1) {
@@ -108,8 +259,17 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
 
   for (int64_t i = 0; i < count0; ++i) {
     for (int64_t j = 0; j < count1; ++j) {
-      iv0Values.push_back(*lb0 + i * *step0);
-      iv1Values.push_back(*lb1 + j * *step1);
+#if 0
+      int64_t iv0val = *lb0 + i * *step0;
+      int64_t iv1val = *lb1 + j * *step1;
+#else
+      int64_t iv0val = 0;
+      int64_t iv1val = 0;
+      tpp_mlir_gilbert_d2xy(&iv0val, &iv1val, i*count1 + j, count0, count1);
+#endif
+
+      iv0Values.push_back(iv0val);
+      iv1Values.push_back(iv1val);
     }
   }
 

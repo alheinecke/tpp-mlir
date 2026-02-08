@@ -19,8 +19,8 @@ func.func @flatten_2d_forall() {
 // CHECK:         %[[WORK:.*]] = memref.alloca() : memref<4x8xi32>
 // CHECK:         %[[C4:.*]] = arith.constant 4 : index
 // CHECK:         %[[C8:.*]] = arith.constant 8 : index
-// CHECK:         %[[IV_I:.*]] = arith.constant dense<[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3]> : vector<32xi64>
-// CHECK:         %[[IV_J:.*]] = arith.constant dense<[0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7]> : vector<32xi64>
+// CHECK:         %[[IV_I:.*]] = arith.constant dense<[0, 0, 1, 1, 2, 3, 3, 2, 2, 3, 3, 2, 1, 1, 0, 0, 0, 0, 1, 1, 2, 3, 3, 2, 2, 3, 3, 2, 1, 1, 0, 0]> : vector<32xi64>
+// CHECK:         %[[IV_J:.*]] = arith.constant dense<[0, 1, 1, 0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 2, 2, 3, 4, 5, 5, 4, 4, 4, 5, 5, 6, 6, 7, 7, 7, 6, 6, 7]> : vector<32xi64>
 // CHECK:         scf.forall (%[[IDX:.*]]) in (32) {
 // CHECK:           %[[I_I64:.*]] = vector.extract %[[IV_I]][%[[IDX]]] : i64 from vector<32xi64>
 // CHECK:           %[[J_I64:.*]] = vector.extract %[[IV_J]][%[[IDX]]] : i64 from vector<32xi64>
@@ -53,8 +53,8 @@ func.func @flatten_different_bounds() {
 // CHECK:         %[[C2:.*]] = arith.constant 2 : index
 // CHECK:         %[[C3:.*]] = arith.constant 3 : index
 // CHECK:         %[[C100:.*]] = arith.constant 100 : i32
-// CHECK:         %[[IV_I:.*]] = arith.constant dense<[0, 0, 0, 1, 1, 1]> : vector<6xi64>
-// CHECK:         %[[IV_J:.*]] = arith.constant dense<[0, 1, 2, 0, 1, 2]> : vector<6xi64>
+// CHECK:         %[[IV_I:.*]] = arith.constant dense<[0, 1, 1, 1, 0, 0]> : vector<6xi64>
+// CHECK:         %[[IV_J:.*]] = arith.constant dense<[0, 0, 1, 2, 2, 1]> : vector<6xi64>
 // CHECK:         scf.forall (%[[IDX:.*]]) in (6) {
 // CHECK:           %[[I_I64:.*]] = vector.extract %[[IV_I]][%[[IDX]]] : i64 from vector<6xi64>
 // CHECK:           %[[J_I64:.*]] = vector.extract %[[IV_J]][%[[IDX]]] : i64 from vector<6xi64>
