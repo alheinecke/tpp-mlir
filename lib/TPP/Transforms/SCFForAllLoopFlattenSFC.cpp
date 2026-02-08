@@ -63,6 +63,11 @@ namespace tpp {
 using namespace mlir;
 using namespace mlir::scf;
 
+#if 0
+#define TPP_MLIR_DISABLE_SFC
+#endif
+
+#ifndef TPP_MLIR_DISABLE_SFC
 /// Free functions for calculting generlized hilbert index from multi-dimensional indices and bounds
 static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
                        int64_t *xres, int64_t *yres,
@@ -180,7 +185,7 @@ static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
                         -bx2, -by2,
                         -(ax-ax2), -(ay-ay2));
 }
-
+#endif
 
 /// Flatten a 2D forall loop of the form:
 ///   scf.forall (%i, %j) in (%ub0, %ub1) {
@@ -259,7 +264,7 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
 
   for (int64_t i = 0; i < count0; ++i) {
     for (int64_t j = 0; j < count1; ++j) {
-#if 0
+#ifdef TPP_MLIR_DISABLE_SFC
       int64_t iv0val = *lb0 + i * *step0;
       int64_t iv1val = *lb1 + j * *step1;
 #else
