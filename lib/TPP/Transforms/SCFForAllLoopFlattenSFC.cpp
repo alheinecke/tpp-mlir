@@ -1,4 +1,4 @@
-//===- SCFForAllLoopFlatten.cpp - Flatten 2D scf.forall ------------------===//
+//===- SCFForAllLoopFlattenSFC.cpp - Flatten 2D scf.forall ---------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -54,8 +54,8 @@
 
 namespace mlir {
 namespace tpp {
-#define GEN_PASS_DECL_SCFFORALLLOOPFLATTEN
-#define GEN_PASS_DEF_SCFFORALLLOOPFLATTEN
+#define GEN_PASS_DECL_SCFFORALLLOOPFLATTENSFC
+#define GEN_PASS_DEF_SCFFORALLLOOPFLATTENSFC
 #include "TPP/Passes.h.inc"
 } // namespace tpp
 } // namespace mlir
@@ -365,8 +365,8 @@ static void getInnermostForallLoops(Operation *rootOp,
   });
 }
 
-struct SCFForAllLoopFlatten
-    : public tpp::impl::SCFForAllLoopFlattenBase<SCFForAllLoopFlatten> {
+struct SCFForAllLoopFlattenSFC
+    : public tpp::impl::SCFForAllLoopFlattenSFCBase<SCFForAllLoopFlattenSFC> {
   void runOnOperation() override {
     auto *parentOp = getOperation();
     

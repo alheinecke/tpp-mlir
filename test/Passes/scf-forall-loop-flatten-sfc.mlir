@@ -1,4 +1,4 @@
-// RUN: tpp-opt %s --scf-forall-loop-flatten -split-input-file | FileCheck %s
+// RUN: tpp-opt %s --scf-forall-loop-flatten-sfc -split-input-file | FileCheck %s
 
 func.func @flatten_2d_forall() {
   %work = memref.alloca() : memref<4x8xi32>
