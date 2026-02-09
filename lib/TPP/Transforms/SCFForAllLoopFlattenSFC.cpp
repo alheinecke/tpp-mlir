@@ -206,7 +206,12 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
     return failure();
   }
 
-  // Only support unit steps
+  // Only support unit steps for simplicity (can be relaxed if needed)
+  if (*step0 != 1 || *step1 != 1) {
+    return failure();
+  }
+
+  // Only support lower bounds of 0 for simplicity (can be relaxed if needed)
   if (*step0 != 1 || *step1 != 1) {
     return failure();
   }
