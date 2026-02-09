@@ -32,124 +32,117 @@ namespace tpp {
 using namespace mlir;
 using namespace mlir::scf;
 
-/// Free functions for calculting generlized hilbert index from multi-dimensional indices and bounds
-/* The generalized hilbert functions are from: https://github.com/jakubcerveny/gilbert */
-static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
-                       int64_t *xres, int64_t *yres,
-                       int64_t ax,int64_t ay,
-                       int64_t bx,int64_t by );
+namespace sfc {
 
-static int64_t tpp_mlir_gilbert_d2xy(int64_t *x, int64_t *y, int64_t idx, int64_t w,int64_t h);
+/// Free functions for calculating generalized hilbert index from multi-dimensional indices and bounds
+/// The generalized hilbert functions are from: https://github.com/jakubcerveny/gilbert
 
-static int64_t tpp_mlir_gilbert_d2xy(int64_t *x, int64_t *y, int64_t idx,int64_t w,int64_t h) {
-  *x = 0;
-  *y = 0;
+void gilbertD2xyRecursive(int64_t dstIdx, int64_t curIdx,
+                          int64_t &xres, int64_t &yres,
+                          int64_t ax, int64_t ay,
+                          int64_t bx, int64_t by) {
+  const int64_t w = std::abs(ax + ay);
+  const int64_t h = std::abs(bx + by);
 
-  if (w >= h) {
-    return tpp_mlir_gilbert_d2xy_r(idx,0, x,y, w,0, 0,h);
-  }
-  return tpp_mlir_gilbert_d2xy_r(idx,0, x,y, 0,h, w,0);
-}
+  const int64_t x = xres;
+  const int64_t y = yres;
 
-static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
-                       int64_t *xres, int64_t *yres,
-                       int64_t ax,int64_t ay,
-                       int64_t bx,int64_t by ) {
-  int64_t nxt_idx;
-  int64_t w, h, x, y,
-      dax, day,
-      dbx, dby,
-      di;
-  int ax2, ay2, bx2, by2, w2, h2;
+  // Unit major direction
+  const int64_t dax = (ax > 0) - (ax < 0);
+  const int64_t day = (ay > 0) - (ay < 0);
 
-  w = std::abs(ax + ay);
-  h = std::abs(bx + by);
+  // Unit orthogonal direction
+  const int64_t dbx = (bx > 0) - (bx < 0);
+  const int64_t dby = (by > 0) - (by < 0);
 
-  x = *xres;
-  y = *yres;
-
-  /* unit major direction */
-  dax = (ax > 0) - (ax < 0);
-  day = (ay > 0) - (ay < 0);
-
-  /* unit orthogonal direction */
-  dbx = (bx > 0) - (bx < 0);
-  dby = (by > 0) - (by < 0);
-
-  di = dst_idx - cur_idx;
+  const int64_t di = dstIdx - curIdx;
 
   if (h == 1) {
-    *xres = x + dax*di;
-    *yres = y + day*di;
-    return 0;
+    xres = x + dax * di;
+    yres = y + day * di;
+    return;
   }
 
   if (w == 1) {
-    *xres = x + dbx*di;
-    *yres = y + dby*di;
-    return 0;
+    xres = x + dbx * di;
+    yres = y + dby * di;
+    return;
   }
 
-  /* floor function */
-  ax2 = ax >> 1;
-  ay2 = ay >> 1;
-  bx2 = bx >> 1;
-  by2 = by >> 1;
+  // Floor function
+  int64_t ax2 = ax >> 1;
+  int64_t ay2 = ay >> 1;
+  int64_t bx2 = bx >> 1;
+  int64_t by2 = by >> 1;
 
-  w2 = std::abs(ax2 + ay2);
-  h2 = std::abs(bx2 + by2);
+  const int64_t w2 = std::abs(ax2 + ay2);
+  const int64_t h2 = std::abs(bx2 + by2);
 
-  if ((2*w) > (3*h)) {
+  if ((2 * w) > (3 * h)) {
     if ((w2 & 1) && (w > 2)) {
-      /* prefer even steps */
+      // Prefer even steps
       ax2 += dax;
       ay2 += day;
     }
 
-    /* long case: split in two parts only */
-    nxt_idx = cur_idx + std::abs((ax2 + ay2)*(bx + by));
-    if ((cur_idx <= dst_idx) && (dst_idx < nxt_idx)) {
-      *xres = x;
-      *yres = y;
-      return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx,  xres, yres, ax2, ay2, bx, by);
+    // Long case: split in two parts only
+    int64_t nxtIdx = curIdx + std::abs((ax2 + ay2) * (bx + by));
+    if ((curIdx <= dstIdx) && (dstIdx < nxtIdx)) {
+      xres = x;
+      yres = y;
+      gilbertD2xyRecursive(dstIdx, curIdx, xres, yres, ax2, ay2, bx, by);
+      return;
     }
-    cur_idx = nxt_idx;
+    curIdx = nxtIdx;
 
-    *xres = x + ax2;
-    *yres = y + ay2;
-    return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx, xres, yres, ax-ax2, ay-ay2, bx, by);
+    xres = x + ax2;
+    yres = y + ay2;
+    gilbertD2xyRecursive(dstIdx, curIdx, xres, yres, ax - ax2, ay - ay2, bx, by);
+    return;
   }
 
   if ((h2 & 1) && (h > 2)) {
-    /* prefer even steps */
+    // Prefer even steps
     bx2 += dbx;
     by2 += dby;
   }
 
-  /* standard case: one step up, one long horizontal, one step down */
-  nxt_idx = cur_idx + std::abs((bx2 + by2)*(ax2 + ay2));
-  if ((cur_idx <= dst_idx) && (dst_idx < nxt_idx)) {
-    *xres = x;
-    *yres = y;
-    return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx, xres,yres, bx2,by2, ax2,ay2);
+  // Standard case: one step up, one long horizontal, one step down
+  int64_t nxtIdx = curIdx + std::abs((bx2 + by2) * (ax2 + ay2));
+  if ((curIdx <= dstIdx) && (dstIdx < nxtIdx)) {
+    xres = x;
+    yres = y;
+    gilbertD2xyRecursive(dstIdx, curIdx, xres, yres, bx2, by2, ax2, ay2);
+    return;
   }
-  cur_idx = nxt_idx;
+  curIdx = nxtIdx;
 
-  nxt_idx = cur_idx + std::abs((ax + ay)*((bx - bx2) + (by - by2)));
-  if ((cur_idx <= dst_idx) && (dst_idx < nxt_idx)) {
-    *xres = x + bx2;
-    *yres = y + by2;
-    return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx, xres,yres, ax,ay, bx-bx2,by-by2);
+  nxtIdx = curIdx + std::abs((ax + ay) * ((bx - bx2) + (by - by2)));
+  if ((curIdx <= dstIdx) && (dstIdx < nxtIdx)) {
+    xres = x + bx2;
+    yres = y + by2;
+    gilbertD2xyRecursive(dstIdx, curIdx, xres, yres, ax, ay, bx - bx2, by - by2);
+    return;
   }
-  cur_idx = nxt_idx;
+  curIdx = nxtIdx;
 
-  *xres = x + (ax - dax) + (bx2 - dbx);
-  *yres = y + (ay - day) + (by2 - dby);
-  return tpp_mlir_gilbert_d2xy_r(dst_idx, cur_idx,
-                        xres,yres,
-                        -bx2, -by2,
-                        -(ax-ax2), -(ay-ay2));
+  xres = x + (ax - dax) + (bx2 - dbx);
+  yres = y + (ay - day) + (by2 - dby);
+  gilbertD2xyRecursive(dstIdx, curIdx, xres, yres, -bx2, -by2, -(ax - ax2), -(ay - ay2));
 }
+
+void gilbertD2xy(int64_t &x, int64_t &y, int64_t idx, int64_t w, int64_t h) {
+  x = 0;
+  y = 0;
+
+  if (w >= h) {
+    gilbertD2xyRecursive(idx, 0, x, y, w, 0, 0, h);
+  } else {
+    gilbertD2xyRecursive(idx, 0, x, y, 0, h, w, 0);
+  }
+}
+
+} // namespace sfc
 
 /// Flatten a 2D forall loop of the form:
 ///   scf.forall (%i, %j) in (%ub0, %ub1) {
@@ -221,7 +214,7 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   if (totalCount <= 0) {
     return failure();
   }
-  if (totalCount > 32767*32767) {
+  if (count0 > 32767 || count1 > 32767) {
     return failure();
   }
 
@@ -233,11 +226,11 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
     for (int64_t j = 0; j < count1; ++j) {
       int64_t iv0val = 0;
       int64_t iv1val = 0;
-      // Instead of simple flatting, eg. 
+      // Instead of simple flattening, e.g. 
       //   iv0val = *lb0 + i * *step0;
       //   iv1val = *lb1 + j * *step1;
-      // we are using a generalized hilbert curve to calculate the indices, which can improve locality for certain access patterns
-      tpp_mlir_gilbert_d2xy(&iv0val, &iv1val, i*count1 + j, count0, count1);
+      // we are using a generalized Hilbert curve to calculate the indices, which can improve locality for certain access patterns
+      sfc::gilbertD2xy(iv0val, iv1val, i * count1 + j, count0, count1);
 
       iv0Values.push_back(static_cast<int16_t>(iv0val));
       iv1Values.push_back(static_cast<int16_t>(iv1val));
