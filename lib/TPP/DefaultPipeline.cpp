@@ -55,10 +55,10 @@ llvm::cl::opt<bool>
                 llvm::cl::desc("Default pipeline - enable parallel execution"),
                 llvm::cl::init(false));
 
-// Control parallelism.
+// Control scf.forall iteration ordering / flattening strategy.
 llvm::cl::opt<bool>
     sfcOrder("sfc-order",
-                llvm::cl::desc("use space-filling curve based access strategy for scf.forall loops in default pipeline"),
+                llvm::cl::desc("Use space-filling-curve-based iteration ordering / flattening for scf.forall loops in the default pipeline"),
                 llvm::cl::init(true));
 
 // Control grid parallelism sizes.
