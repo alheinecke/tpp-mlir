@@ -130,8 +130,11 @@ private:
       // bufferization.
       pm.addNestedPass<func::FuncOp>(createDecomposeAggregatedOps());
 
-      // Flatten 2D scf.forall loops using space-filling curve before bufferization.
-      pm.addPass(createSCFForAllLoopFlattenSFC());
+      // Flatten 2D scf.forall loops using space-filling curve before bufferization
+      // only use this parallelization strategy when the user does not specify any parallel task grid sizes, as it may interfere with user specified parallelization strategies.
+      if (parallelTaskGrid.empty()) {
+        pm.addPass(createSCFForAllLoopFlattenSFC());
+      }
 
       // Bufferize: tensor->memref.
       pm.addPass(createBufferize());
