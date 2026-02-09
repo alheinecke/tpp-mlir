@@ -376,7 +376,7 @@ struct SCFForAllLoopFlattenSFC
     auto *parentOp = getOperation();
     
     // Collect all innermost forall loops with 2 induction variables
-    SmallVector<ForallOp, 4> innermostForalls;
+    SmallVector<ForallOp, 20> innermostForalls;
     getInnermostForallLoops(parentOp, innermostForalls);
 
     OpBuilder builder(&getContext());

@@ -132,7 +132,7 @@ private:
 
       // Flatten 2D scf.forall loops using space-filling curve before bufferization
       // only use this parallelization strategy when the user does not specify any parallel task grid sizes, as it may interfere with user specified parallelization strategies.
-      if (parallelTaskGrid.empty()) {
+      if (scfParallel) {
         pm.addPass(createSCFForAllLoopFlattenSFC());
       }
 
@@ -177,10 +177,14 @@ private:
     if (linalgToVector) {
       pm.addPass(createConvertVectorToSCFPass());
       // Low level parallelization passes.
-      pm.addPass(createLowLevelParallelization(LowLevelParallelization));
+      if(!scfParallel) {
+        pm.addPass(createLowLevelParallelization(LowLevelParallelization));
+      }
     } else {
       // Low level parallelization passes.
-      pm.addPass(createLowLevelParallelization(LowLevelParallelization));
+      if(!scfParallel) {
+        pm.addPass(createLowLevelParallelization(LowLevelParallelization));
+      }
       // TODO: These passes have been moved out of low level parallelization
       // pass since these apply on xsmm dialect. They'll be moved back in
       // subsequent commits.
