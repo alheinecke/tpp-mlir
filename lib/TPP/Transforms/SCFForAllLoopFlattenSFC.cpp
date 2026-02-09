@@ -255,18 +255,9 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   SmallVector<OpFoldResult> newUpperBound = {builder.getIndexAttr(totalCount)};
   SmallVector<OpFoldResult> newStep = {builder.getIndexAttr(*step0)};
 
-  // Adjust mapping to match the new 1D loop: only reuse if it is already
-  // compatible with a single induction variable, otherwise drop it.
-  ArrayAttr origMapping = op.getMapping();
-  ArrayAttr newMapping;
-  if (!origMapping || origMapping.size() <= 1)
-    newMapping = origMapping;
-  else
-    newMapping = ArrayAttr();
-
   auto newLoop = builder.create<ForallOp>(
       loc, newLowerBound, newUpperBound, newStep,
-      op.getOutputs(), newMapping);
+      op.getOutputs(), op.getMapping());
 
   // Build the body of the new loop
   builder.setInsertionPointToStart(newLoop.getBody());
