@@ -26,11 +26,6 @@ namespace tpp {
 #define GEN_PASS_DECL_SCFFORALLLOOPFLATTENSFC
 #define GEN_PASS_DEF_SCFFORALLLOOPFLATTENSFC
 #include "TPP/Passes.h.inc"
-} // namespace tpp
-} // namespace mlir
-
-using namespace mlir;
-using namespace mlir::scf;
 
 namespace sfc {
 
@@ -143,6 +138,11 @@ void gilbertD2xy(int64_t &x, int64_t &y, int64_t idx, int64_t w, int64_t h) {
 }
 
 } // namespace sfc
+} // namespace tpp
+} // namespace mlir
+
+using namespace mlir;
+using namespace mlir::scf;
 
 /// Flatten a 2D forall loop of the form:
 ///   scf.forall (%i, %j) in (%ub0, %ub1) {
@@ -230,7 +230,7 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
       //   iv0val = *lb0 + i * *step0;
       //   iv1val = *lb1 + j * *step1;
       // we are using a generalized Hilbert curve to calculate the indices, which can improve locality for certain access patterns
-      sfc::gilbertD2xy(iv0val, iv1val, i * count1 + j, count0, count1);
+      tpp::sfc::gilbertD2xy(iv0val, iv1val, i * count1 + j, count0, count1);
 
       iv0Values.push_back(static_cast<int16_t>(iv0val));
       iv1Values.push_back(static_cast<int16_t>(iv1val));
