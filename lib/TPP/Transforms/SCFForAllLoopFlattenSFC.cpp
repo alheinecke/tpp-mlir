@@ -30,7 +30,7 @@ namespace tpp {
 namespace sfc {
 
 /// Free functions for calculating generalized hilbert index from multi-dimensional indices and bounds
-/// The generalized hilbert functions are from: https://github.com/jakubcerveny/gilbert
+/// The generalized hilbert functions are adopted from: https://github.com/jakubcerveny/gilbert
 
 void gilbertD2xyRecursive(int64_t dstIdx, int64_t curIdx,
                           int64_t &xres, int64_t &yres,
