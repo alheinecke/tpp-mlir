@@ -206,6 +206,11 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
     return failure();
   }
 
+  // Only support unit steps
+  if (*step0 != 1 || *step1 != 1) {
+    return failure();
+  }
+
   // Calculate iteration counts
   int64_t count0 = (*ub0 - *lb0) / *step0;
   int64_t count1 = (*ub1 - *lb1) / *step1;
