@@ -43,6 +43,7 @@
 
 #define TPP_MLIR_SIGN(A) (0 < (A) ? (1) : ( 0 == (A) ? (0) : (-1)))
 
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SCF/Utils/Utils.h"
@@ -350,7 +351,7 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
 
 namespace {
 
-// Helper to collect innermost forall loops
+// Helper to collect innermost forall loops with exactly 2 induction variables
 static void getInnermostForallLoops(Operation *rootOp,
                                      SmallVectorImpl<ForallOp> &result) {
   rootOp->walk([&](ForallOp forallOp) {
@@ -365,7 +366,20 @@ static void getInnermostForallLoops(Operation *rootOp,
     });
     
     if (!hasNestedForall) {
-      result.push_back(forallOp);
+      // Only consider 2D forall loops that are innermost (no nested forall)
+      if (forallOp.getRank() == 2) {
+        // Check if the forall body contains any affine.apply operations
+        bool hasAffineApply = false;
+        forallOp->walk([&](affine::AffineApplyOp applyOp) {
+          hasAffineApply = true;
+          return WalkResult::interrupt();
+        });
+
+        // Only add if no affine.apply operations found
+        if (!hasAffineApply) {
+          result.push_back(forallOp);
+        }
+      }
     }
   });
 }
@@ -375,21 +389,18 @@ struct SCFForAllLoopFlattenSFC
   void runOnOperation() override {
     auto *parentOp = getOperation();
     
-    // Collect all innermost forall loops with 2 induction variables
+    // Collect all innermost forall loops with exactly 2 induction variables
     SmallVector<ForallOp, 20> innermostForalls;
     getInnermostForallLoops(parentOp, innermostForalls);
 
     OpBuilder builder(&getContext());
 
-    // Process each innermost forall loop
+    // Process each innermost 2D forall loop
     for (ForallOp forallOp : innermostForalls) {
-      // Only process loops with exactly 2 induction variables
-      if (forallOp.getRank() == 2) {
-        if (failed(flattenForallLoop(forallOp, builder))) {
-          // If flattening fails for any reason, just skip this loop
-          // (e.g., non-constant bounds, etc.)
-          continue;
-        }
+      if (failed(flattenForallLoop(forallOp, builder))) {
+        // If flattening fails for any reason, just skip this loop
+        // (e.g., non-constant bounds, etc.)
+        continue;
       }
     }
   }

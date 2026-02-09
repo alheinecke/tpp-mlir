@@ -59,7 +59,7 @@ llvm::cl::opt<bool>
 llvm::cl::opt<bool>
     scfParallel("scf-parallel",
                 llvm::cl::desc("use space-filling curve based parallelization strategy for scf.forall loops in default pipeline"),
-                llvm::cl::init(false));
+                llvm::cl::init(true));
 
 // Control grid parallelism sizes.
 llvm::cl::list<unsigned>

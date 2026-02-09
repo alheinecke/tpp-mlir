@@ -37,7 +37,7 @@ def DefaultTppPasses : Pass<"default-tpp-passes", "ModuleOp"> {
            "bool", /*default=*/"false",
            "Skip all TPP transformations. Lower linalg directly to loops.">,
     Option<"scfParallel", "scf-parallel",
-           "bool", /*default=*/"false",
+           "bool", /*default=*/"true",
            "use scf parallelization">,
     ListOption<"parallelTaskGrid", "parallel-task-grid",
            "unsigned", "Grid-sizes for parallel tasks.">,
