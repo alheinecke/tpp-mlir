@@ -11,38 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-/****************************************************************************************
-  BSD 2-Clause License
-
-  Copyright (c) 2018, Jakub Červený
-  All rights reserved.
-
-  Redistribution and use in source and binary forms, with or without
-  modification, are permitted provided that the following conditions are met:
-
-  * Redistributions of source code must retain the above copyright notice, this
-    list of conditions and the following disclaimer.
-
-  * Redistributions in binary form must reproduce the above copyright notice,
-    this list of conditions and the following disclaimer in the documentation
-    and/or other materials provided with the distribution.
-
-  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-****************************************************************************************/
-
-/* The generalized hilbert functions are from: https://github.com/jakubcerveny/gilbert */
-
-#define TPP_MLIR_SIGN(A) (0 < (A) ? (1) : ( 0 == (A) ? (0) : (-1)))
-
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
@@ -64,12 +32,8 @@ namespace tpp {
 using namespace mlir;
 using namespace mlir::scf;
 
-#if 0
-#define TPP_MLIR_DISABLE_SFC
-#endif
-
-#ifndef TPP_MLIR_DISABLE_SFC
 /// Free functions for calculting generlized hilbert index from multi-dimensional indices and bounds
+/* The generalized hilbert functions are from: https://github.com/jakubcerveny/gilbert */
 static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
                        int64_t *xres, int64_t *yres,
                        int64_t ax,int64_t ay,
@@ -105,12 +69,12 @@ static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
   y = *yres;
 
   /* unit major direction */
-  dax = TPP_MLIR_SIGN(ax);
-  day = TPP_MLIR_SIGN(ay);
+  dax = (ax > 0) - (ax < 0);
+  day = (ay > 0) - (ay < 0);
 
   /* unit orthogonal direction */
-  dbx = TPP_MLIR_SIGN(bx);
-  dby = TPP_MLIR_SIGN(by);
+  dbx = (bx > 0) - (bx < 0);
+  dby = (by > 0) - (by < 0);
 
   di = dst_idx - cur_idx;
 
@@ -186,7 +150,6 @@ static int64_t tpp_mlir_gilbert_d2xy_r(int64_t dst_idx, int64_t cur_idx,
                         -bx2, -by2,
                         -(ax-ax2), -(ay-ay2));
 }
-#endif
 
 /// Flatten a 2D forall loop of the form:
 ///   scf.forall (%i, %j) in (%ub0, %ub1) {
@@ -258,31 +221,33 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   if (totalCount <= 0) {
     return failure();
   }
+  if (totalCount > 32767*32767) {
+    return failure();
+  }
 
   // Build the flattened index vectors
-  SmallVector<int64_t> iv0Values;
-  SmallVector<int64_t> iv1Values;
+  SmallVector<int16_t> iv0Values;
+  SmallVector<int16_t> iv1Values;
 
   for (int64_t i = 0; i < count0; ++i) {
     for (int64_t j = 0; j < count1; ++j) {
-#ifdef TPP_MLIR_DISABLE_SFC
-      int64_t iv0val = *lb0 + i * *step0;
-      int64_t iv1val = *lb1 + j * *step1;
-#else
       int64_t iv0val = 0;
       int64_t iv1val = 0;
+      // Instead of simple flatting, eg. 
+      //   iv0val = *lb0 + i * *step0;
+      //   iv1val = *lb1 + j * *step1;
+      // we are using a generalized hilbert curve to calculate the indices, which can improve locality for certain access patterns
       tpp_mlir_gilbert_d2xy(&iv0val, &iv1val, i*count1 + j, count0, count1);
-#endif
 
-      iv0Values.push_back(iv0val);
-      iv1Values.push_back(iv1val);
+      iv0Values.push_back(static_cast<int16_t>(iv0val));
+      iv1Values.push_back(static_cast<int16_t>(iv1val));
     }
   }
 
   // Create dense constant vectors
-  auto vectorType = VectorType::get(ArrayRef<int64_t>{totalCount}, builder.getI64Type());
-  auto iv0Attr = DenseElementsAttr::get(vectorType, ArrayRef<int64_t>(iv0Values));
-  auto iv1Attr = DenseElementsAttr::get(vectorType, ArrayRef<int64_t>(iv1Values));
+  auto vectorType = VectorType::get(ArrayRef<int64_t>{totalCount}, builder.getI16Type());
+  auto iv0Attr = DenseElementsAttr::get(vectorType, ArrayRef<int16_t>(iv0Values));
+  auto iv1Attr = DenseElementsAttr::get(vectorType, ArrayRef<int16_t>(iv1Values));
 
   Value iv0Vector = builder.create<arith::ConstantOp>(loc, vectorType, iv0Attr);
   Value iv1Vector = builder.create<arith::ConstantOp>(loc, vectorType, iv1Attr);
@@ -305,7 +270,7 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   Value i = builder.create<vector::ExtractOp>(loc, iv0Vector, idx);
   Value j = builder.create<vector::ExtractOp>(loc, iv1Vector, idx);
 
-  // Convert from i64 to index
+  // Convert extracted values to index type
   Value iIndex = builder.create<arith::IndexCastOp>(loc, builder.getIndexType(), i);
   Value jIndex = builder.create<arith::IndexCastOp>(loc, builder.getIndexType(), j);
 
