@@ -57,8 +57,8 @@ llvm::cl::opt<bool>
 
 // Control parallelism.
 llvm::cl::opt<bool>
-    scfParallel("scf-parallel",
-                llvm::cl::desc("use space-filling curve based parallelization strategy for scf.forall loops in default pipeline"),
+    sfcOrder("sfc-order",
+                llvm::cl::desc("use space-filling curve based access strategy for scf.forall loops in default pipeline"),
                 llvm::cl::init(true));
 
 // Control grid parallelism sizes.
@@ -168,7 +168,7 @@ private:
       // Apply the default preprocessing pass
       DefaultTppPassesOptions tppDefaultOptions; 
       tppDefaultOptions.linalgToLoops = linalgToLoops;
-      tppDefaultOptions.scfParallel = scfParallel;
+      tppDefaultOptions.sfcOrder = sfcOrder;
       tppDefaultOptions.parallelTaskGrid = SmallVector<unsigned>{
           parallelTaskGrid.begin(), parallelTaskGrid.end()};
       tppDefaultOptions.linalgToVector = linalgToVector;

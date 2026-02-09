@@ -131,8 +131,7 @@ private:
       pm.addNestedPass<func::FuncOp>(createDecomposeAggregatedOps());
 
       // Flatten 2D scf.forall loops using space-filling curve before bufferization
-      // only use this parallelization strategy when the user does not specify any parallel task grid sizes, as it may interfere with user specified parallelization strategies.
-      if (scfParallel) {
+      if (sfcOrder) {
         pm.addPass(createSCFForAllLoopFlattenSFC());
       }
 
@@ -177,12 +176,12 @@ private:
     if (linalgToVector) {
       pm.addPass(createConvertVectorToSCFPass());
       // Low level parallelization passes.
-      if(!scfParallel) {
+      if(!sfcOrder) {
         pm.addPass(createLowLevelParallelization(LowLevelParallelization));
       }
     } else {
       // Low level parallelization passes.
-      if(!scfParallel) {
+      if(!sfcOrder) {
         pm.addPass(createLowLevelParallelization(LowLevelParallelization));
       }
       // TODO: These passes have been moved out of low level parallelization
