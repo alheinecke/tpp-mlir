@@ -212,6 +212,16 @@ def ConvertPerfToFunc : Pass<"convert-perf-to-func", "ModuleOp"> {
                            "tensor::TensorDialect"];
 }
 
+def ConvertX86LockToMemRef : Pass<"convert-x86lock-to-memref", "func::FuncOp"> {
+  let summary = "Convert X86Lock to MemRef";
+  let description = [{
+    Convert X86Lock operations to MemRef atomic operations.
+  }];
+  let dependentDialects = ["arith::ArithDialect",
+                           "memref::MemRefDialect",
+                           "scf::SCFDialect"];
+}
+
 def PackVNNI : Pass<"pack-vnni", "func::FuncOp"> {
   let summary = "Convert matmul/brgemm to vnni layout";
   let description = [{

@@ -12,6 +12,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "TPP/Dialect/Check/CheckDialect.h"
 #include "TPP/Dialect/Perf/PerfDialect.h"
+#include "TPP/Dialect/X86Lock/X86LockDialect.h"
 #include "TPP/Dialect/Xsmm/XsmmDialect.h"
 #include "mlir/Dialect/Async/IR/Async.h"
 #include "mlir/Dialect/OpenMP/OpenMPDialect.h"
