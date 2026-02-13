@@ -42,7 +42,7 @@ struct SetLockOpLowering : public OpRewritePattern<SetLockOp> {
     
     // Implement: int expected = 0; while (!compare_exchange_weak(expected, 1)) { expected = 0; }
     // Using scf.while with atomic_rmw assign (swap)
-    auto whileOp = rewriter.create<scf::WhileOp>(loc, TypeRange{}, ValueRange{});
+    auto whileOp = scf::WhileOp::create(rewriter, loc, TypeRange{}, ValueRange{});
     
     // Build the "before" region: try atomic assign 1, continue if old value was NOT 0
     {
@@ -50,19 +50,19 @@ struct SetLockOpLowering : public OpRewritePattern<SetLockOp> {
       Block *beforeBlock = rewriter.createBlock(&whileOp.getBefore());
       rewriter.setInsertionPointToStart(beforeBlock);
       
-      Value c0_i8 = rewriter.create<arith::ConstantIntOp>(loc, 0, 8);
-      Value c1_i8 = rewriter.create<arith::ConstantIntOp>(loc, 1, 8);
+      Value c0_i8 = arith::ConstantIntOp::create(rewriter, loc, 0, 8);
+      Value c1_i8 = arith::ConstantIntOp::create(rewriter, loc, 1, 8);
       
       // Atomic assign: swap lock to 1, get old value
-      auto atomicOp = rewriter.create<memref::AtomicRMWOp>(
+      auto atomicOp = memref::AtomicRMWOp::create(rewriter,
           loc, arith::AtomicRMWKind::assign, c1_i8, lockMemRef, ValueRange{});
       
       // Check if NOT acquired (old value != 0, meaning lock was already held)
-      Value notAcquired = rewriter.create<arith::CmpIOp>(
+      Value notAcquired = arith::CmpIOp::create(rewriter,
           loc, arith::CmpIPredicate::ne, atomicOp.getResult(), c0_i8);
       
       // Continue looping if we didn't acquire the lock
-      rewriter.create<scf::ConditionOp>(loc, notAcquired, ValueRange{});
+      scf::ConditionOp::create(rewriter, loc, notAcquired, ValueRange{});
     }
     
     // Build the "after" region: just yield to loop back
@@ -70,7 +70,7 @@ struct SetLockOpLowering : public OpRewritePattern<SetLockOp> {
       OpBuilder::InsertionGuard guard(rewriter);
       Block *afterBlock = rewriter.createBlock(&whileOp.getAfter());
       rewriter.setInsertionPointToStart(afterBlock);
-      rewriter.create<scf::YieldOp>(loc, ValueRange{});
+      scf::YieldOp::create(rewriter, loc, ValueRange{});
     }
     
     rewriter.replaceOp(op, whileOp.getResults());
@@ -89,8 +89,8 @@ struct UnsetLockOpLowering : public OpRewritePattern<UnsetLockOp> {
     
     // Implement: *lock_var = 0
     // Simple store to release the lock
-    Value c0_i8 = rewriter.create<arith::ConstantIntOp>(loc, 0, 8);
-    rewriter.create<memref::StoreOp>(loc, c0_i8, lockMemRef);
+    Value c0_i8 = arith::ConstantIntOp::create(rewriter, loc, 0, 8);
+    memref::StoreOp::create(rewriter, loc, c0_i8, lockMemRef);
     
     rewriter.eraseOp(op);
     return success();
