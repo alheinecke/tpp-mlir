@@ -150,13 +150,13 @@ using namespace mlir::scf;
 ///   }
 ///
 /// into:
-///   %iv_i = arith.constant dense<[...]> : vector<NxI64>
-///   %iv_j = arith.constant dense<[...]> : vector<NxI64>
+///   %iv_i = arith.constant dense<[...]> : vector<NxI16>
+///   %iv_j = arith.constant dense<[...]> : vector<NxI16>
 ///   scf.forall (%idx) in (%cN) {
-///     %i_i64 = vector.extract %iv_i[%idx] : i64 from vector<NxI64>
-///     %j_i64 = vector.extract %iv_j[%idx] : i64 from vector<NxI64>
-///     %i = arith.index_cast %i_i64 : i64 to index
-///     %j = arith.index_cast %j_i64 : i64 to index
+///     %i_i16 = vector.extract %iv_i[%idx] : i16 from vector<NxI16>
+///     %j_i16 = vector.extract %iv_j[%idx] : i16 from vector<NxI16>
+///     %i = arith.index_cast %i_i16 : i16 to index
+///     %j = arith.index_cast %j_i16 : i16 to index
 ///     // original body using %i and %j
 ///   }
 ///
@@ -224,7 +224,7 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   if (totalCount <= 0) {
     return failure();
   }
-  if (count0 > 32767 || count1 > 32767) {
+  if (count0 > std::numeric_limits<int16_t>::max() || count1 > std::numeric_limits<int16_t>::max()) {
     return failure();
   }
 
@@ -252,16 +252,15 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   auto iv0Attr = DenseElementsAttr::get(vectorType, ArrayRef<int16_t>(iv0Values));
   auto iv1Attr = DenseElementsAttr::get(vectorType, ArrayRef<int16_t>(iv1Values));
 
-  Value iv0Vector = builder.create<arith::ConstantOp>(loc, vectorType, iv0Attr);
-  Value iv1Vector = builder.create<arith::ConstantOp>(loc, vectorType, iv1Attr);
+  Value iv0Vector = arith::ConstantOp::create(builder, loc, vectorType, iv0Attr);
+  Value iv1Vector = arith::ConstantOp::create(builder, loc, vectorType, iv1Attr);
 
   // Create the new 1D forall loop
   SmallVector<OpFoldResult> newLowerBound = {builder.getIndexAttr(*lb0)};
   SmallVector<OpFoldResult> newUpperBound = {builder.getIndexAttr(totalCount)};
   SmallVector<OpFoldResult> newStep = {builder.getIndexAttr(*step0)};
 
-  auto newLoop = builder.create<ForallOp>(
-      loc, newLowerBound, newUpperBound, newStep,
+  auto newLoop = ForallOp::create(builder, loc, newLowerBound, newUpperBound, newStep,
       op.getOutputs(), op.getMapping());
 
   // Build the body of the new loop
@@ -270,12 +269,12 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   Value idx = newLoop.getInductionVars()[0];
 
   // Extract the original induction variable values using vector.extract with dynamic position
-  Value i = builder.create<vector::ExtractOp>(loc, iv0Vector, idx);
-  Value j = builder.create<vector::ExtractOp>(loc, iv1Vector, idx);
+  Value i = vector::ExtractOp::create(builder, loc, iv0Vector, idx);
+  Value j = vector::ExtractOp::create(builder, loc, iv1Vector, idx);
 
   // Convert extracted values to index type
-  Value iIndex = builder.create<arith::IndexCastOp>(loc, builder.getIndexType(), i);
-  Value jIndex = builder.create<arith::IndexCastOp>(loc, builder.getIndexType(), j);
+  Value iIndex = arith::IndexCastOp::create(builder, loc, builder.getIndexType(), i);
+  Value jIndex = arith::IndexCastOp::create(builder, loc, builder.getIndexType(), j);
 
   // Clone the original loop body
   IRMapping mapper;
