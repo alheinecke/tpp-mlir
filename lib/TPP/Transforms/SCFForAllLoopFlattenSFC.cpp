@@ -212,7 +212,7 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   }
 
   // Only support lower bounds of 0 for simplicity (can be relaxed if needed)
-  if (*step0 != 1 || *step1 != 1) {
+  if (*lb0 != 0 || *lb1 != 0) {
     return failure();
   }
 
