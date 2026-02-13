@@ -293,17 +293,12 @@ static LogicalResult flattenForallLoop(ForallOp op, OpBuilder &builder) {
   // Handle the terminator (scf.forall.in_parallel)
   // Only clone terminator contents if there are outputs (shared_outs)
   if (!op.getOutputs().empty()) {
-    Operation *oldTerminator = op.getBody()->getTerminator();
-    Operation *newTerminator = newLoop.getBody()->getTerminator();
-    
-    if (auto oldInParallel = dyn_cast<scf::InParallelOp>(oldTerminator)) {
-      if (auto newInParallel = dyn_cast<scf::InParallelOp>(newTerminator)) {
-        // Clone the operations inside the in_parallel block
-        builder.setInsertionPointToStart(newInParallel.getBody());
-        for (auto &inParallelOp : oldInParallel.getBody()->without_terminator()) {
-          builder.clone(inParallelOp, mapper);
-        }
-      }
+    auto oldInParallel = cast<scf::InParallelOp>(op.getBody()->getTerminator());
+    auto newInParallel = cast<scf::InParallelOp>(newLoop.getBody()->getTerminator());
+    // Clone the operations inside the in_parallel block
+    builder.setInsertionPointToStart(newInParallel.getBody());
+    for (auto &inParallelOp : oldInParallel.getBody()->without_terminator()) {
+      builder.clone(inParallelOp, mapper);
     }
   }
 
