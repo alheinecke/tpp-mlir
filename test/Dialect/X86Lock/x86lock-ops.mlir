@@ -15,6 +15,7 @@ func.func @test_lock() {
   
   // Critical section would go here
   
+  // CHECK: llvm.fence acq_rel
   // CHECK: memref.store %[[C0]], %{{.*}}[] : memref<i8>
   
   // LLVM-LABEL: llvm.func @test_lock
@@ -28,6 +29,7 @@ func.func @test_lock() {
   // LLVM: %[[CMP:.*]] = llvm.icmp "ne" %[[XCHG]], %[[C0]]
   // LLVM: cf.cond_br %[[CMP]], ^[[LOOP]], ^[[EXIT:.*]]
   // LLVM: ^[[EXIT]]:
+  // LLVM: llvm.fence acq_rel
   // LLVM: %[[STORE_PTR:.*]] = llvm.extractvalue %{{.*}}[1]
   // LLVM: llvm.store %[[C0]], %[[STORE_PTR]]
   x86lock.unsetLock %lock : memref<i8>
@@ -54,8 +56,10 @@ func.func @test_multiple_locks() {
   
   // Critical section with both locks held
   
+  // CHECK: llvm.fence acq_rel
   // CHECK: memref.store %[[C0]]
   x86lock.unsetLock %lock2 : memref<i8>
+  // CHECK: llvm.fence acq_rel
   // CHECK: memref.store %[[C0]]
   
   // LLVM-LABEL: llvm.func @test_multiple_locks
@@ -73,7 +77,9 @@ func.func @test_multiple_locks() {
   // LLVM: llvm.atomicrmw xchg %{{.*}}, %[[C1]] acq_rel
   // LLVM: llvm.icmp "ne"
   // LLVM: cf.cond_br
+  // LLVM: llvm.fence acq_rel
   // LLVM: llvm.store %[[C0]]
+  // LLVM: llvm.fence acq_rel
   // LLVM: llvm.store %[[C0]]
   x86lock.unsetLock %lock1 : memref<i8>
   

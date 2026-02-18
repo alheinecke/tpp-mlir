@@ -13,6 +13,7 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/PatternMatch.h"
@@ -88,6 +89,9 @@ struct UnsetLockOpLowering : public OpRewritePattern<UnsetLockOp> {
     Value lockMemRef = op.getLock();
     
     // Implement: *lock_var = 0
+    // Fence to ensure all memory writes in the critical section are visible
+    // before releasing the lock.
+    LLVM::FenceOp::create(rewriter, loc, LLVM::AtomicOrdering::acq_rel);
     // Simple store to release the lock
     Value c0_i8 = arith::ConstantIntOp::create(rewriter, loc, 0, 8);
     memref::StoreOp::create(rewriter, loc, c0_i8, lockMemRef);
@@ -102,8 +106,8 @@ struct ConvertX86LockToMemRefPass
   using ConvertX86LockToMemRefBase::ConvertX86LockToMemRefBase;
 
   void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<arith::ArithDialect, memref::MemRefDialect,
-                    scf::SCFDialect>();
+    registry.insert<arith::ArithDialect, LLVM::LLVMDialect,
+                    memref::MemRefDialect, scf::SCFDialect>();
   }
 
   void runOnOperation() override {
