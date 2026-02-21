@@ -88,7 +88,6 @@ struct UnsetLockOpLowering : public OpRewritePattern<UnsetLockOp> {
     Location loc = op.getLoc();
     Value lockMemRef = op.getLock();
     
-    // Implement: *lock_var = 0
     // Fence to ensure all memory writes in the critical section are visible
     // before releasing the lock.
     LLVM::FenceOp::create(rewriter, loc, LLVM::AtomicOrdering::acq_rel);
