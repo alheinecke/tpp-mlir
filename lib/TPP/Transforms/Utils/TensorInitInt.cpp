@@ -226,13 +226,27 @@ void QuantTensorInitInt::fillData() {
   // Update the internal buffer with quantized values.
   buffer = quantizedValues;
 
-  // Update the corresponding rescale into temporary storage scaleBuffer.
-  if (floatInit) {
-    std::vector<llvm::APFloat> rescales;
+  // Update the corresponding float/f8 dequant scale factors into member
+  // variable of class object.
+  if (floatScaleInit) {
+    std::vector<llvm::APFloat> floatDequantScales;
     for (size_t i = 0; i < channelwiseScales.size(); i++) {
-      rescales.emplace_back(static_cast<float>(1.0f / channelwiseScales[i]));
+      float scale = 1.0f / static_cast<float>(channelwiseScales[i]);
+      if (scaleDataType.isFloat(32))
+        floatDequantScales.emplace_back(scale);
+      else if (scaleDataType.isFloat(8)) {
+        uint32_t shiftedValue;
+        std::memcpy(&shiftedValue, &scale, sizeof(uint32_t));
+        shiftedValue = shiftedValue >> 23;
+        llvm::APInt intScale(bitWidth, shiftedValue, false);
+        floatDequantScales.emplace_back(
+            llvm::APFloat(llvm::APFloat::Float8E8M0FNU(), intScale));
+      } else {
+        llvm_unreachable("Unsupported scale data type");
+      }
     }
-    floatInit->setScaleBuffer(rescales);
+    static_cast<QuantScaleTensorInitFloat *>(floatScaleInit.get())
+        ->setScaleBuffer(floatDequantScales);
   }
 
   // Update the matrix type to indicate next argument would be weight matrix.

@@ -8,8 +8,10 @@
 
 // RUN: mlir-gen --kernel=args --seed=0 --float-type=mx-bf16 --batch=128 --layers=2304,768 --quant-type=dequantize 2>&1 | FileCheck %s --check-prefix=MXBF16-DEQUANT
 // RUN: mlir-gen --kernel=args --seed=0 --float-type=mx-i8-f32 --batch=128 --layers=2304,768 --quant-type=dequantize 2>&1 | FileCheck %s --check-prefix=MXI8F32-DEQUANT
+// RUN: mlir-gen --kernel=args --seed=0 --float-type=mx-i8-f32 --batch=128 --layers=2304,768 --quant-type=dequantize --scale-type=f8E8M0FNU 2>&1 | FileCheck %s --check-prefix=MXI8-I8SCALE-DEQUANT
 // RUN: mlir-gen --kernel=args --seed=0 --float-type=mx-f32-i8 --batch=128 --layers=2304,768 --quant-type=quantize 2>&1 | FileCheck %s --check-prefix=MXF32I8-QUANT
 // RUN: mlir-gen --kernel=args --seed=0 --float-type=mx-i8-f32 --batch=4096 --layers=8192,4096 --quant-type=dequantize --output=generic --tiles=32,32,64 --vnni=4 2>&1 | FileCheck %s --check-prefix=MXI8F32-PACKED-DEQUANT
+// RUN: mlir-gen --kernel=args --seed=0 --float-type=mx-i8-f32 --batch=128 --layers=2304,768 --quant-type=dequantize --scale-type=f8E8M0FNU --tiles=32,32,64 --vnni=4 2>&1 | FileCheck %s --check-prefix=MXI8-I8SCALE-PACKED-DEQUANT
 
 
 // FP32: // RUN{{.*}}tpp-run %s -n {{\d*}}
@@ -241,3 +243,57 @@
 // MXI8F32-PACKED-DEQUANT:             arith.mulf
 // MXI8F32-PACKED-DEQUANT:             linalg.yield
 
+
+// MXI8-I8SCALE-DEQUANT-DAG: #[[$ATTR_0:.+]] = affine_map<(d0, d1, d2) -> (d0, d2)>
+// MXI8-I8SCALE-DEQUANT-DAG: #[[$ATTR_1:.+]] = affine_map<(d0, d1, d2) -> (d2, d1)>
+// MXI8-I8SCALE-DEQUANT-DAG: #[[$ATTR_2:.+]] = affine_map<(d0, d1, d2) -> (d0, d1)>
+// MXI8-I8SCALE-DEQUANT-DAG: #[[$ATTR_3:.+]] = affine_map<(d0, d1) -> (d0, d1)>
+// MXI8-I8SCALE-DEQUANT-DAG: #[[$ATTR_4:.+]] = affine_map<(d0, d1) -> (d0)>
+// MXI8-I8SCALE-DEQUANT-DAG: #[[$ATTR_5:.+]] = affine_map<(d0, d1) -> (d1)>
+// MXI8-I8SCALE-DEQUANT-LABEL:   func.func @entry(
+// MXI8-I8SCALE-DEQUANT-SAME:                     %[[ARG0:.*]]: tensor<128x2304xi8>,
+// MXI8-I8SCALE-DEQUANT-SAME:                     %[[ARG1:.*]]: tensor<128xf8E8M0FNU>,
+// MXI8-I8SCALE-DEQUANT-SAME:                     %[[ARG2:.*]]: tensor<2304x768xi8>,
+// MXI8-I8SCALE-DEQUANT-SAME:                     %[[ARG3:.*]]: tensor<768xf8E8M0FNU>,
+// MXI8-I8SCALE-DEQUANT-SAME:                     %[[ARG4:.*]]: tensor<128x768xf32>) -> tensor<128x768xf32> {
+// MXI8-I8SCALE-DEQUANT:           arith.constant 0 : i32
+// MXI8-I8SCALE-DEQUANT:           tensor.empty() : tensor<128x768xi32>
+// MXI8-I8SCALE-DEQUANT:           linalg.fill
+// MXI8-I8SCALE-DEQUANT:           linalg.contract indexing_maps = [#[[$ATTR_0]], #[[$ATTR_1]], #[[$ATTR_2]]] ins(%[[ARG0]], %[[ARG2]]
+// MXI8-I8SCALE-DEQUANT:           linalg.generic {indexing_maps = [#[[$ATTR_3]], #[[$ATTR_4]], #[[$ATTR_5]], #[[$ATTR_3]]], iterator_types = ["parallel", "parallel"]}
+// MXI8-I8SCALE-DEQUANT:           ^bb0
+// MXI8-I8SCALE-DEQUANT-2:             arith.extf {{.*}} fastmath<nnan>
+// MXI8-I8SCALE-DEQUANT:               arith.mulf
+// MXI8-I8SCALE-DEQUANT:               arith.sitofp
+// MXI8-I8SCALE-DEQUANT:               arith.mulf
+// MXI8-I8SCALE-DEQUANT:               linalg.yield
+// MXI8-I8SCALE-DEQUANT:           } -> tensor<128x768xf32>
+
+
+// MXI8-I8SCALE-PACKED-DEQUANT-DAG: #[[$ATTR_0:.+]] = affine_map<(d0, d1, d2, d3, d4, d5, d6) -> (d0, d2, d4, d6, d3)>
+// MXI8-I8SCALE-PACKED-DEQUANT-DAG: #[[$ATTR_1:.+]] = affine_map<(d0, d1, d2, d3, d4, d5, d6) -> (d1, d2, d6, d5, d3)>
+// MXI8-I8SCALE-PACKED-DEQUANT-DAG: #[[$ATTR_2:.+]] = affine_map<(d0, d1, d2, d3, d4, d5, d6) -> (d0, d1, d4, d5)>
+// MXI8-I8SCALE-PACKED-DEQUANT-DAG: #[[$ATTR_3:.+]] = affine_map<(d0, d1, d2, d3) -> (d0, d1, d2, d3)>
+// MXI8-I8SCALE-PACKED-DEQUANT-DAG: #[[$ATTR_4:.+]] = affine_map<(d0, d1, d2, d3) -> (d0, 0, d2, 0)>
+// MXI8-I8SCALE-PACKED-DEQUANT-DAG: #[[$ATTR_5:.+]] = affine_map<(d0, d1, d2, d3) -> (d1, 0, d3, 0)>
+// MXI8-I8SCALE-PACKED-DEQUANT-LABEL:   func.func @entry(
+// MXI8-I8SCALE-PACKED-DEQUANT-SAME:                     %[[ARG0:.*]]: tensor<4x36x32x64xi8>,
+// MXI8-I8SCALE-PACKED-DEQUANT-SAME:                     %[[ARG1:.*]]: tensor<128xf8E8M0FNU>,
+// MXI8-I8SCALE-PACKED-DEQUANT-SAME:                     %[[ARG2:.*]]: tensor<24x36x16x32x4xi8>,
+// MXI8-I8SCALE-PACKED-DEQUANT-SAME:                     %[[ARG3:.*]]: tensor<768xf8E8M0FNU>,
+// MXI8-I8SCALE-PACKED-DEQUANT-SAME:                     %[[ARG4:.*]]: tensor<4x24x32x32xf32>) -> tensor<4x24x32x32xf32> {
+// MXI8-I8SCALE-PACKED-DEQUANT:           arith.constant 0 : i32
+// MXI8-I8SCALE-PACKED-DEQUANT:           tensor.empty() : tensor<4x24x32x32xi32>
+// MXI8-I8SCALE-PACKED-DEQUANT:           linalg.fill
+// MXI8-I8SCALE-PACKED-DEQUANT:           tensor.expand_shape %[[ARG0]] {{\[\[}}0], [1], [2], [3, 4]] output_shape [4, 36, 32, 16, 4] : tensor<4x36x32x64xi8> into tensor<4x36x32x16x4xi8>
+// MXI8-I8SCALE-PACKED-DEQUANT:           linalg.contract indexing_maps = [#[[$ATTR_0]], #[[$ATTR_1]], #[[$ATTR_2]]]
+// MXI8-I8SCALE-PACKED-DEQUANT:           tensor.expand_shape %[[ARG1]] {{\[\[}}0, 1, 2, 3]] output_shape [4, 1, 32, 1] : tensor<128xf8E8M0FNU> into tensor<4x1x32x1xf8E8M0FNU>
+// MXI8-I8SCALE-PACKED-DEQUANT:           tensor.expand_shape %[[ARG3]] {{\[\[}}0, 1, 2, 3]] output_shape [24, 1, 32, 1] : tensor<768xf8E8M0FNU> into tensor<24x1x32x1xf8E8M0FNU>
+// MXI8-I8SCALE-PACKED-DEQUANT:           linalg.generic {indexing_maps = [#[[$ATTR_3]], #[[$ATTR_4]], #[[$ATTR_5]], #[[$ATTR_3]]], iterator_types = ["parallel", "parallel", "parallel", "parallel"]}
+// MXI8-I8SCALE-PACKED-DEQUANT:           ^bb0
+// MXI8-I8SCALE-PACKED-DEQUANT-2:             arith.extf {{.*}} fastmath<nnan>
+// MXI8-I8SCALE-PACKED-DEQUANT:               arith.mulf
+// MXI8-I8SCALE-PACKED-DEQUANT:               arith.sitofp
+// MXI8-I8SCALE-PACKED-DEQUANT:               arith.mulf
+// MXI8-I8SCALE-PACKED-DEQUANT:             linalg.yield
+// MXI8-I8SCALE-PACKED-DEQUANT:           } -> tensor<4x24x32x32xf32>

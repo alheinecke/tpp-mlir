@@ -95,7 +95,8 @@ llvm::cl::opt<int> seed("seed",
 // Default const if seed == 0, and normal otherwise
 llvm::cl::opt<std::string> initType(
     "init-type",
-    llvm::cl::desc("Initializer type (const, rand, normal)"),
+    llvm::cl::desc(
+        "Initializer type (const, rand, normal, identity, mixed, quant)"),
     llvm::cl::init(""));
 
 // Identity matrix

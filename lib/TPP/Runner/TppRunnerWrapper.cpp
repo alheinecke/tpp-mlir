@@ -114,9 +114,9 @@ struct TppRunnerWrapper
     // Print the kernel's input arguments by iterating through kernelArgs
     if (printInput) {
       for (auto arg : bench.getKernelArgs()) {
-        if (auto shapedType = dyn_cast<ShapedType>(arg.getType())) {
+        if (auto shapedType = dyn_cast<ShapedType>(arg.value.getType())) {
           if (shapedType.hasStaticShape())
-            if (failed(bench.printShapedType(arg)))
+            if (failed(bench.printShapedType(arg.value)))
               return;
         }
       }

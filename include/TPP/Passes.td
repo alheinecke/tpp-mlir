@@ -25,7 +25,7 @@ def LoadTppDialects : Pass<"load-tpp-dialects", "ModuleOp"> {
                            "check::CheckDialect",
                            "perf::PerfDialect",
                            "omp::OpenMPDialect",
-                           "amx::AMXDialect",
+                           "x86::X86Dialect",
                            "async::AsyncDialect"];
 }
 
@@ -75,8 +75,6 @@ def VectorizationPass : Pass<"vectorization-pass",
   let dependentDialects = [ "memref::MemRefDialect", "linalg::LinalgDialect", "vector::VectorDialect" ];
 }
 
-
-
 def HoistVectorTransfers : Pass<"hoist-vector-transfer"> {
   let summary = "Hoist vector transfer operation outside of reduction and k loop";
   let description = [{
@@ -85,7 +83,33 @@ def HoistVectorTransfers : Pass<"hoist-vector-transfer"> {
   let dependentDialects = [ "vector::VectorDialect", "scf::SCFDialect" ];
 }
 
+def HoistLoopInvariantSubsets : Pass<"hoist-loop-invariant-subsets"> {
+  let summary = "Hoists operations ouside loop iteration.";
+  let description = [{
+    Moves operations that access or compute subsets (slices/views) of data outside 
+	a loop when those subsets do not depend on the loop iteration with the help
+        of upstream MLIR pass.
+  }];
+  let dependentDialects = [ "vector::VectorDialect", "scf::SCFDialect" ];
+}
 
+def VectorContractToNanoKernels : Pass<"vector-contract-to-nano-kernels"> {
+  let summary = "Lowers a vector.contract operation to a target CPU-specific kernels";
+  let description = [{
+    Performs lowering of a vector.contract operation to a target specific CPU vector
+    instruction sets such as AMX, AVX512, AVX512_BF16, AVX2, AVX2_BF16/Int8, AVX10_Int8.
+  }];
+  let dependentDialects = [ "vector::VectorDialect", "scf::SCFDialect"];
+}
+
+def FlattenVectorOps : Pass<"flatten-vector-ops"> {
+  let summary = "Flatten vector.transfer_read/write ops into simpler 1D forms.";
+  let description = [{
+    Rewrite multi-dimensional vector.transfer_read/write ops into simpler (often 1D) forms.
+    Helps downstream lowering and optimization by flattening complex vector memory accesses.
+  }];
+  let dependentDialects = [ "vector::VectorDialect" ];
+}
 
 def VectorContractToOuterproduct : Pass<
     "vector-contract-to-outerproduct"> {
@@ -118,8 +142,7 @@ def VectorContractToAMX : Pass<
                            "tensor::TensorDialect",
                            "vector::VectorDialect",
                            "arith::ArithDialect",
-                           "amx::AMXDialect",
-                           "x86vector::X86VectorDialect"];
+                           "x86::X86Dialect"];
 }
 
 
@@ -142,7 +165,7 @@ def BF16DotProduct : Pass<"vector-contract-to-bf16dp"> {
    let description = [{
      Perform avx512bf16 dot product lowering of vector contraction operation for bf16 type with vnni layout=2.
    }];
-   let dependentDialects = [ "vector::VectorDialect", "scf::SCFDialect", "x86vector::X86VectorDialect" ];
+   let dependentDialects = [ "vector::VectorDialect", "scf::SCFDialect", "x86::X86Dialect" ];
 }
 
 def MicroKernels : Pass<"vector-contract-to-micro-kernels"> {
@@ -153,7 +176,7 @@ def MicroKernels : Pass<"vector-contract-to-micro-kernels"> {
    let dependentDialects = [ "vector::VectorDialect", 
 			     "scf::SCFDialect", 
 			     "arith::ArithDialect",
-			     "x86vector::X86VectorDialect" ];
+			     "x86::X86Dialect" ];
   let options = [
          Option<"targetFeature", "target-feature", "std::string", "",
                 "Target feature for a given architecture">,
@@ -170,8 +193,17 @@ def MicroKernelsAMX : Pass<"vector-contract-to-micro-kernels-amx"> {
                              "linalg::LinalgDialect",
                              "scf::SCFDialect",
                              "arith::ArithDialect",
-                             "amx::AMXDialect",
-                             "x86vector::X86VectorDialect" ];
+                             "x86::X86Dialect" ];
+}
+
+def ConvertLinalgGenericTo32BitAccumulation : Pass<"convert-linalg-generic-to-32-bit-acc"> {
+   let summary = "Convert linalg.generic op from bf16/i8 to f32/i32 accumulation.";
+   let description = [{
+     Converts a linalg.generic from low-precision (bf16/i8) to high-precision
+      accumulation (f32/i32) and finally tuncates the output back to original type.
+   }];
+   let dependentDialects = [ "linalg::LinalgDialect",
+                             "arith::ArithDialect" ];
 }
 
 def ConvertXsmmToFunc : Pass<"convert-xsmm-to-func", "ModuleOp"> {
@@ -681,8 +713,7 @@ def ConvertVectorToX86 : Pass<"convert-vector-to-x86"> {
     sequences of operations.
   }];
   let dependentDialects = ["vector::VectorDialect",
-                           "x86vector::X86VectorDialect",
-                           "amx::AMXDialect",
+                           "x86::X86Dialect",
                            "arith::ArithDialect"];
 }
 
@@ -698,6 +729,63 @@ def RegisterUnroll : Pass<"register-unroll"> {
   let options = [
     ListOption<"gemmUnroll", "gemm-unroll", "int64_t",
                "Unroll shape sizes for the innermost dims: [M, N, K]">
+  ];
+}
+
+def TileDequantElementwiseOps : Pass<"tile-dequant-elem-ops"> {
+  let summary = "Tile and Vectorize element-wise dequantize op sequence.";
+  
+  let description = [{
+    This pass transforms element-wise dequantize op sequence that have
+    broadcast operands into a more AVX-friendly form using scalar broadcast.
+    
+    This approach is more register-efficient than creating full 2D vector operations.
+    
+    Example transformation:
+    ```mlir
+    linalg.generic {
+      indexing_maps = [
+        affine_map<(d0, d1) -> (d0, d1)>,  // Input matrix
+        affine_map<(d0, d1) -> (d0)>,      // Row scale (broadcast)
+        affine_map<(d0, d1) -> (d1)>,      // Col scale (broadcast)
+        affine_map<(d0, d1) -> (d0, d1)>   // Output
+      ],
+      iterator_types = ["parallel", "parallel"]
+    } ins(%A, %scale_a, %scale_b : ...) outs(%C : ...) {
+      ^bb0(%a, %sa, %sb, %out):
+        %scale = arith.mulf %sa, %sb
+        %result = arith.mulf %a, %scale
+        linalg.yield %result
+    }
+    ```
+    
+    Becomes:
+    ```mlir
+    scf.for %i = 0 to 32 step 1 {
+      %scale_a_scalar = memref.load %scale_a[%i]
+      %scale_a_vec = vector.splat %scale_a_scalar : vector<16xf32>
+      
+      scf.for %j = 0 to 32 step 16 {
+        %scale_b_vec = vector.transfer_read %scale_b[%j] : vector<16xf32>
+        %scale_vec = arith.mulf %scale_a_vec, %scale_b_vec : vector<16xf32>
+        %a_vec = vector.transfer_read %A[%i, %j] : vector<16xf32>
+        %result_vec = arith.mulf %a_vec, %scale_vec : vector<16xf32>
+        vector.transfer_write %result_vec, %C[%i, %j]
+      }
+    }
+    ```
+  }];
+
+  let options = [
+    Option<"vectorSize", "vector-size", "unsigned", /*default=*/"16",
+           "Vector size for vectorization (default: 16 for AVX-512)">
+  ];
+
+  let dependentDialects = [
+    "arith::ArithDialect",
+    "memref::MemRefDialect",
+    "scf::SCFDialect",
+    "vector::VectorDialect"
   ];
 }
 

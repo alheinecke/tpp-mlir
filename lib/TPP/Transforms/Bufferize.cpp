@@ -149,6 +149,13 @@ void Bufferize::runOnOperation() {
   passManager.addPass(
       bufferization::createDropEquivalentBufferResultsPass(dropBufOpts));
 
+  // Promote buffers to stack if they are small enough, e.g., 4KB of shape
+  // 32x32xi32.
+  mlir::bufferization::PromoteBuffersToStackPassOptions promoteOptions;
+  promoteOptions.maxAllocSizeInBytes = 1024 * 4;
+  passManager.addNestedPass<func::FuncOp>(
+      bufferization::createPromoteBuffersToStackPass(promoteOptions));
+
   if (dealloc) {
     bufferization::BufferDeallocationPipelineOptions options;
     bufferization::buildBufferDeallocationPipeline(passManager, options);

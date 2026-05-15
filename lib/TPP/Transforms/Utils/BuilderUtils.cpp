@@ -12,6 +12,7 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/BuiltinTypes.h"
 
 #include "TPP/Transforms/Utils/BuilderUtils.h"
 
@@ -79,14 +80,15 @@ Value getConstIndex(OpBuilder &builder, int value) {
 Value createDenseTensor(OpBuilder &builder, TensorInitType initType,
                         TensorType type, int seed) {
   auto unkLoc = builder.getUnknownLoc();
-  auto init = getTensorInit(initType, type.getElementType(), seed);
+  auto init = getTensorInit(initType, type.getElementType(), nullptr, seed);
   auto floatInit = init->get(type);
   assert(!failed(floatInit) && "Invalid dense tensor initializer");
   return arith::ConstantOp::create(builder, unkLoc, type, floatInit.value());
 }
 
 Value createDenseMemref(OpBuilder &builder, ModuleOp module,
-                        TensorInitType initType, MemRefType type, int seed) {
+                        TensorInitType initType, MemRefType type, int seed,
+                        MemRefType nextType, bool isScaleArgument) {
   auto unkLoc = builder.getUnknownLoc();
   StringRef globalName;
   // First create the global
@@ -104,7 +106,9 @@ Value createDenseMemref(OpBuilder &builder, ModuleOp module,
     std::string name = "__wrapper_" + std::to_string(order++);
 
     auto alignment = builder.getIntegerAttr(builder.getI64Type(), 128);
-    auto init = getTensorInit(initType, type.getElementType(), seed);
+    auto init = getTensorInit(initType, type.getElementType(),
+                              nextType ? nextType.getElementType() : nullptr,
+                              seed, isScaleArgument);
     auto floatInit = init->get(type);
     assert(!failed(floatInit) && "Invalid dense tensor initializer");
 
